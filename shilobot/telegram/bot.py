@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import os
-import sys
+
+# import sys
+import configparser
 
 # import time
 import logging
@@ -31,6 +33,17 @@ def setup_logger():
 
 
 logger = setup_logger()
+
+# Check if config file exists.
+if os.path.exists("config.ini"):
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+
+    TOKEN = config["DEFAULT"]["TELEGRAM_API_KEY"]
+    DEBUG = config["DEFAULT"].getboolean("DEBUG")
+else:
+    raise Exception("config.ini file not found!")
+
 
 songs = read_dsl("db.yaml")
 fts = FTSModel(songs)
@@ -133,6 +146,4 @@ def main(token):
 
 
 if __name__ == "__main__":
-    if "TOKEN" not in os.environ:
-        sys.exit("Set TOKEN env variable")
-    main(os.environ["TOKEN"])
+    main(TOKEN)

@@ -21,14 +21,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential file libncurses5-dev zlib1g-dev gawk gettext \
             xsltproc rsync wget curl xz-utils ca-certificates python3
-          sudo ln -sf /usr/bin/python3 /usr/local/bin/python
       - name: Build firmware
         run: |
           chmod +x build.sh
-          # 18.06's prerequisite version parser rejects modern GCC/G++.
-          # Patch the actual ImageBuilder invocation so FORCE is a make variable.
-          sed -i '/^make image /s/^make image /make image FORCE=1 /' build.sh
-          grep -n '^make image' build.sh
+          # OpenWrt 18.06 ImageBuilder's prerequisite checker only recognizes
+          # GCC through version 10 and requires Python 2. The ImageBuilder is
+          # precompiled, so mark that legacy host check as satisfied after it
+          # is unpacked and before the image target runs.
+          sed -i '/^make image /i mkdir -p staging_dir/host \&\& touch staging_dir/host/.prereq-build' build.sh
+          grep -n -B1 -A2 '^make image' build.sh
           ./build.sh
       - name: Upload firmware
         uses: actions/upload-artifact@v4

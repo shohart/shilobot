@@ -25,10 +25,10 @@ jobs:
       - name: Build firmware
         run: |
           chmod +x build.sh
-          # OpenWrt 18.06's prerequisite checker mis-detects modern GCC/G++ and
-          # insists on Python 2. Pass FORCE to the ImageBuilder make invocation
-          # itself, not only in the shell environment.
-          sed -i 's/^make image \\/make image FORCE=1 \\/' build.sh
+          # 18.06's prerequisite version parser rejects modern GCC/G++.
+          # Patch the actual ImageBuilder invocation so FORCE is a make variable.
+          sed -i '/^make image /s/^make image /make image FORCE=1 /' build.sh
+          grep -n '^make image' build.sh
           ./build.sh
       - name: Upload firmware
         uses: actions/upload-artifact@v4

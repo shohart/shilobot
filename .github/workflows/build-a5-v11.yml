@@ -1,0 +1,36 @@
+name: Build A5-V11 PrintServer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'a5-v11-build-*'
+    paths:
+      - 'build.sh'
+      - '.github/workflows/build-a5-v11.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential file libncurses5-dev zlib1g-dev gawk gettext \
+            xsltproc rsync wget curl xz-utils ca-certificates python3
+      - name: Build firmware
+        run: |
+          chmod +x build.sh
+          ./build.sh
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: a5-v11-printserver-firmware
+          path: |
+            out/*.bin
+            out/*.sha256
+            out/SHA256SUMS
+            out/build-info.txt
+          if-no-files-found: error

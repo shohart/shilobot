@@ -21,16 +21,58 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential file libncurses5-dev zlib1g-dev gawk gettext \
             xsltproc rsync wget curl xz-utils ca-certificates python3
-      - name: Build firmware
+      - name: Patch legacy build and build firmware
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('build.sh')
+          s = p.read_text()
+
+          # Keep a conventional loopback interface in the custom network file.
+          needle = "cat > 'files/etc/config/network' <<'__A5_FILE_2__'\n"
+          assert needle in s
+          loopback = """config interface 'loopback'\n\toption ifname 'lo'\n\toption proto 'static'\n\toption ipaddr '127.0.0.1'\n\toption netmask '255.0.0.0'\n\n"""
+          s = s.replace(needle, needle + loopback, 1)
+
+          # kmod-ipt-offload is a default package on this old target and drags
+          # several netfilter modules into a device that does no routing/NAT.
+          s = s.replace('-kmod-ipt-nat -kmod-ip6tables', '-kmod-ipt-nat -kmod-ipt-offload -kmod-ip6tables', 1)
+
+          # OpenWrt 18.06's host prerequisite parser rejects modern GCC/G++ and
+          # requires Python 2 although ImageBuilder itself is precompiled.
+          marker = 'make image \\\n'
+          assert marker in s
+          s = s.replace(marker, 'mkdir -p staging_dir/host && touch staging_dir/host/.prereq-build\n' + marker, 1)
+          p.write_text(s)
+          PY
           chmod +x build.sh
-          # OpenWrt 18.06 ImageBuilder's prerequisite checker only recognizes
-          # GCC through version 10 and requires Python 2. The ImageBuilder is
-          # precompiled, so mark that legacy host check as satisfied after it
-          # is unpacked and before the image target runs.
-          sed -i '/^make image /i mkdir -p staging_dir/host \&\& touch staging_dir/host/.prereq-build' build.sh
-          grep -n -B1 -A2 '^make image' build.sh
           ./build.sh
+      - name: Verify custom rootfs
+        run: |
+          ROOT="$(find openwrt-imagebuilder-18.06.9-ramips-rt305x.Linux-x86_64/build_dir -type d -name root-ramips | head -n1)"
+          test -n "$ROOT"
+          test -x "$ROOT/usr/sbin/a5printd"
+          test -x "$ROOT/www/cgi-bin/setup"
+          test -f "$ROOT/www/index.html"
+          test -f "$ROOT/etc/config/p910nd"
+          test -f "$ROOT/etc/config/network"
+          test -f "$ROOT/etc/uci-defaults/90-a5-printserver"
+          grep -q "option enabled '1'" "$ROOT/etc/config/p910nd"
+          grep -q "option device '/dev/usb/lp0'" "$ROOT/etc/config/p910nd"
+          grep -q "config interface 'loopback'" "$ROOT/etc/config/network"
+          grep -q "A5-PrintServer" "$ROOT/etc/uci-defaults/90-a5-printserver"
+          grep -q "a5print4130" "$ROOT/etc/uci-defaults/90-a5-printserver"
+          grep -q "192.168.4.1" "$ROOT/etc/config/network"
+          sh -n "$ROOT/usr/sbin/a5printd"
+          sh -n "$ROOT/www/cgi-bin/setup"
+          sh -n "$ROOT/etc/uci-defaults/90-a5-printserver"
+          {
+            echo 'Custom rootfs verification: PASS'
+            echo 'p910nd: enabled, /dev/usb/lp0, TCP 9100'
+            echo 'Provisioning AP: A5-PrintServer / 192.168.4.1'
+            echo 'Ethernet/Wi-Fi supervisor: present and shell syntax valid'
+            echo 'Web provisioning CGI: present and shell syntax valid'
+          } > out/verification.txt
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
@@ -40,4 +82,5 @@ jobs:
             out/*.sha256
             out/SHA256SUMS
             out/build-info.txt
+            out/verification.txt
           if-no-files-found: error

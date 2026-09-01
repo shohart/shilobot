@@ -21,10 +21,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential file libncurses5-dev zlib1g-dev gawk gettext \
             xsltproc rsync wget curl xz-utils ca-certificates python3
+          sudo ln -sf /usr/bin/python3 /usr/local/bin/python
       - name: Build firmware
         run: |
           chmod +x build.sh
-          ./build.sh
+          FORCE=1 ./build.sh
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
